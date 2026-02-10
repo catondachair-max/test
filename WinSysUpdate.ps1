@@ -1,5 +1,4 @@
-# --- UNIVERSAL WATCHER ---
-$githubRepo = "[[URL]]" # This will be filled automatically by installer
+$githubRepo = "[[URL]]" 
 $targetDir = "$env:APPDATA\WinData"
 $myPath = $PSCommandPath
 
