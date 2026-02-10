@@ -1,2 +1,2 @@
-timeout /t 10
-msg * "Ted bys me mel videt ve slozce!"
+timeout /t 5
+echo "Ahoj" > %APPDATA%\WinData\vysledek.txt
